@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: northstar
+      POSTGRES_PASSWORD: northstar
+      POSTGRES_DB: northstar
+    ports:
+      # Host 5433 → container 5432, so we don't collide with a local Postgres.
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # Compose waits for this to pass before starting the API, so the API
+      # never races an unready database on first boot.
+      test: ["CMD-SHELL", "pg_isready -U northstar -d northstar"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: northstar
+      PGPASSWORD: northstar
+      PGDATABASE: northstar
+      PORT: 4000
+      # Dev fallback so `docker compose up` works with zero setup.
+      # Override by exporting JWT_SECRET before running compose.
+      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-secret-change-me}
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
